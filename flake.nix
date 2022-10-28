@@ -71,6 +71,7 @@
             perf-tools
             cargo-flamegraph
             cargo-readme
+            cargo-expand
           ];
           buildEnvVars = { };
         in
