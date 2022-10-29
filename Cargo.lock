@@ -325,11 +325,21 @@ dependencies = [
  "encoding_rs",
  "env_logger 0.9.0",
  "itertools",
+ "libeq_wld_macro",
  "log",
  "nom",
  "num-derive",
  "num-traits",
  "serde",
+]
+
+[[package]]
+name = "libeq_wld_macro"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

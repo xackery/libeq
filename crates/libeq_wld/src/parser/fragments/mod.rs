@@ -26,6 +26,7 @@ mod polygon_animation_reference;
 mod region_flag;
 mod skeleton_track_set;
 mod skeleton_track_set_reference;
+mod test;
 mod texture;
 mod texture_images;
 mod texture_reference;
