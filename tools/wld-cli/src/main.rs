@@ -29,7 +29,7 @@ enum Format {
 
 fn cli() -> Command<'static> {
     Command::new("wld-cli")
-        .version("0.1.0")
+        .version("0.1.1")
         .author("Chad Jablonski <chad@jablonski.xyz>")
         .about("Work with data from EverQuest .wld files")
         .arg_required_else_help(true)
@@ -44,6 +44,7 @@ fn cli() -> Command<'static> {
                 .arg(arg!(-f --format <FORMAT> "Format to extract to").value_parser(value_parser!(Format)).default_value("raw").required(false))
                 .arg(arg!(<WLD_FILE> "The source wld file").required(true))
                 .arg(arg!(<DESTINATION> "The target destination").required(true))
+                .arg(arg!(-fi --fragindex <FRAGINDEX> "The index of the fragment to extract").required(false).value_parser(value_parser!(usize))),
         )
         .subcommand(
             Command::new("create")
@@ -72,11 +73,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             let wld_file = sub_matches.value_of("WLD_FILE").expect("required");
             let destination = sub_matches.value_of("DESTINATION").expect("required");
             let format = sub_matches.get_one::<Format>("format").expect("required");
-            println!(
-                "EXTRACT: {:?} -> {:?} -- FORMAT {:?}",
-                wld_file, destination, format
-            );
-            extract(wld_file, destination, format);
+            let fragindex = sub_matches.get_one::<usize>("fragindex").copied().unwrap_or(0);            
+            extract(wld_file, destination, format, fragindex);
         }
         Some(("create", sub_matches)) => {
             let source = sub_matches.value_of("SOURCE").expect("required");
@@ -182,7 +180,7 @@ fn explore(wld_filename: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn extract(wld_filename: &str, destination: &str, format: &Format) {
+fn extract(wld_filename: &str, destination: &str, format: &Format, frag_index: usize) {
     let wld_data = read_wld_file(wld_filename).expect("Could not read wld file");
     let wld_doc = parser::WldDoc::parse(&wld_data)
         .map_err(|e| {
@@ -191,6 +189,37 @@ fn extract(wld_filename: &str, destination: &str, format: &Format) {
             }
         })
         .expect("Could not read wld file");
+    if frag_index != 0 {
+        let fragment_count = wld_doc.fragment_count();
+        if frag_index >= fragment_count {
+            panic!(
+                "Fragment index out of bounds: {} >= {}",
+                frag_index, fragment_count
+            );
+        }
+        let frag = wld_doc.at(frag_index)
+            .expect("Could not get fragment");
+
+            print!("Extracting fragment at index: {} (size: {} bytes)\n", frag_index, frag.into_bytes().len());
+        let mut out = fs::File::create(destination).expect("Could not create destination file");
+        match format {
+            Format::Raw => {
+                out.write_all(&frag.into_bytes()).expect("Could not write fragment to file");
+            }
+            Format::Json => {
+                serde_json::to_writer_pretty(&mut out, &frag)
+                    .expect("Could not serialize to json");
+            }
+            Format::Ron => {
+                ron::ser::to_writer_pretty(
+                    &mut out,
+                    &frag,
+                    ron::ser::PrettyConfig::new().enumerate_arrays(true),
+                ).expect("Could not serialize to ron");
+            }
+        }
+        return;
+    }
     match format {
         Format::Raw => extract_raw(wld_filename, destination),
         Format::Json => {
@@ -238,6 +267,9 @@ fn extract_raw(wld_filename: &str, destination: &str) {
         let filename = format!("{:04}-{:#04x}.frag", i, fragment_header.fragment_type);
         let dest = Path::new(destination).join(filename);
         let mut file = File::create(&dest).expect(&format!("Failed to create file: {:?}", dest));
+        if (i == 295) {
+            println!("here")
+        }
         file.write_all(fragment_header.field_data).unwrap();
     }
 }
